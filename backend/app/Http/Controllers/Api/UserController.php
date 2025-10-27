@@ -3,72 +3,66 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\UpdateProfileRequest;
+use App\Services\ApiResponseService;
+use App\Services\UserService;
+use Exception;
 
 class UserController extends Controller
 {
-    public function profile(Request $request)
+    protected $userService;
+
+    public function __construct(UserService $userService)
     {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'user' => $request->user()
-            ]
-        ]);
+        $this->userService = $userService;
     }
 
-    public function update(Request $request)
+    public function profile()
     {
-        $user = $request->user();
+        try {
+            $user = $this->userService->getProfile(auth()->user());
 
-        $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
-            'password' => 'sometimes|required|string|min:8|confirmed',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation errors',
-                'errors' => $validator->errors()
-            ], 422);
+            return ApiResponseService::success([
+                'user' => $user
+            ]);
+        } catch (Exception $e) {
+            return ApiResponseService::error(
+                'Failed to fetch profile: ' . $e->getMessage()
+            );
         }
-
-        $updateData = $request->only(['name', 'email']);
-        
-        if ($request->has('password')) {
-            $updateData['password'] = Hash::make($request->password);
-        }
-
-        $user->update($updateData);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Profile updated successfully',
-            'data' => [
-                'user' => $user->fresh()
-            ]
-        ]);
     }
 
-    public function delete(Request $request)
+    public function update(UpdateProfileRequest $request)
     {
-        $user = $request->user();
-        
-        // Delete all tokens
-        $user->tokens()->delete();
-        
-        // Delete user
-        $user->delete();
+        try {
+            $user = $this->userService->updateProfile(
+                auth()->user(),
+                $request->validated()
+            );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Account deleted successfully'
-        ]);
+            return ApiResponseService::success([
+                'user' => $user
+            ], 'Profile updated successfully');
+        } catch (Exception $e) {
+            return ApiResponseService::error(
+                'Failed to update profile: ' . $e->getMessage()
+            );
+        }
+    }
+
+    public function delete()
+    {
+        try {
+            $this->userService->deleteAccount(auth()->user());
+
+            return ApiResponseService::success(
+                null,
+                'Account deleted successfully'
+            );
+        } catch (Exception $e) {
+            return ApiResponseService::error(
+                'Failed to delete account: ' . $e->getMessage()
+            );
+        }
     }
 }

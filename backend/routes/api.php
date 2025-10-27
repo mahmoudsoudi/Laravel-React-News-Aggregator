@@ -16,12 +16,17 @@ use App\Http\Controllers\Api\UserController;
 |
 */
 
+// Test route
+Route::get('/test', function () {
+    return response()->json(['message' => 'API is working!']);
+});
+
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Protected routes
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('api.auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [UserController::class, 'profile']);
     Route::put('/user', [UserController::class, 'update']);

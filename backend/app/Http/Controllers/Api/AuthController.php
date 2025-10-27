@@ -3,92 +3,69 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\LoginRequest;
+use App\Http\Requests\RegisterRequest;
+use App\Services\ApiResponseService;
+use App\Services\AuthService;
+use Exception;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    protected $authService;
+
+    public function __construct(AuthService $authService)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation errors',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'User registered successfully',
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-                'token_type' => 'Bearer'
-            ]
-        ], 201);
+        $this->authService = $authService;
     }
 
-    public function login(Request $request)
+    public function register(RegisterRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
+        try {
+            $data = $this->authService->register($request->validated());
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation errors',
-                'errors' => $validator->errors()
-            ], 422);
+            return ApiResponseService::success(
+                $data,
+                'User registered successfully',
+                201
+            );
+        } catch (Exception $e) {
+            return ApiResponseService::error(
+                'Registration failed: ' . $e->getMessage()
+            );
         }
-
-        if (!Auth::attempt($request->only('email', 'password'))) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
-        }
-
-        $user = User::where('email', $request->email)->firstOrFail();
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Login successful',
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-                'token_type' => 'Bearer'
-            ]
-        ]);
     }
 
-    public function logout(Request $request)
+    public function login(LoginRequest $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        try {
+            $data = $this->authService->login($request->validated());
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Logged out successfully'
-        ]);
+            return ApiResponseService::success(
+                $data,
+                'Login successful'
+            );
+        } catch (Exception $e) {
+            return ApiResponseService::error(
+                $e->getMessage(),
+                null,
+                $e->getCode() ?: 401
+            );
+        }
+    }
+
+    public function logout()
+    {
+        try {
+            $this->authService->logout(auth()->user());
+
+            return ApiResponseService::success(
+                null,
+                'Logged out successfully'
+            );
+        } catch (Exception $e) {
+            return ApiResponseService::error(
+                'Logout failed: ' . $e->getMessage()
+            );
+        }
     }
 }
