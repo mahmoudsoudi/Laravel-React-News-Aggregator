@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -45,5 +46,30 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Get the user's preferences.
+     */
+    public function preferences(): HasOne
+    {
+        return $this->hasOne(UserPreference::class);
+    }
+
+    /**
+     * Get or create user preferences.
+     */
+    public function getPreferences()
+    {
+        if (!$this->preferences) {
+            $this->preferences = $this->preferences()->create([
+                'language' => 'en',
+                'items_per_page' => 20,
+                'show_images' => true,
+                'auto_refresh' => false,
+                'refresh_interval_minutes' => 30,
+            ]);
+        }
+        return $this->preferences;
     }
 }

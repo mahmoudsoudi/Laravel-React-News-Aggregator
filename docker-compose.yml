@@ -1,17 +1,18 @@
+version: '3.8'
+
 services:
   # PostgreSQL Database
-  db:
-    image: postgres:15-alpine
-    container_name: aggregator_db
-    restart: unless-stopped
+  postgres:
+    image: postgres:15
+    container_name: aggregator_postgres
     environment:
       POSTGRES_DB: aggregator
-      POSTGRES_USER: aggregator_user
+      POSTGRES_USER: aggregator
       POSTGRES_PASSWORD: aggregator_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5432:5432"
     networks:
       - aggregator_network
 
@@ -19,9 +20,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: aggregator_redis
-    restart: unless-stopped
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - aggregator_network
 
@@ -31,64 +33,105 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: aggregator_backend
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./backend:/var/www/html
-      - /var/www/html/vendor
     environment:
       - APP_ENV=production
       - APP_DEBUG=false
-      - APP_KEY=base64:your-app-key-here
       - DB_CONNECTION=pgsql
-      - DB_HOST=db
+      - DB_HOST=postgres
       - DB_PORT=5432
       - DB_DATABASE=aggregator
-      - DB_USERNAME=aggregator_user
+      - DB_USERNAME=aggregator
       - DB_PASSWORD=aggregator_password
-      - CACHE_DRIVER=redis
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=null
       - REDIS_PORT=6379
+      - CACHE_DRIVER=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    volumes:
+      - ./backend:/var/www/html
+      - ./cron:/etc/cron.d
+      - ./logs:/var/log
     depends_on:
-      - db
+      - postgres
       - redis
     networks:
       - aggregator_network
+    command: >
+      sh -c "
+        # Wait for database to be ready
+        until php artisan migrate:status; do
+          echo 'Waiting for database...'
+          sleep 2
+        done
+        
+        # Run migrations if needed
+        php artisan migrate --force
+        
+        # Seed initial data
+        php artisan db:seed --force
+        
+        # Start PHP-FPM and cron
+        php-fpm &
+        cron -f
+      "
 
-  # Nginx for Laravel
+  # Nginx Web Server
   nginx:
     image: nginx:alpine
     container_name: aggregator_nginx
-    restart: unless-stopped
     ports:
       - "8000:80"
     volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./backend:/var/www/html
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - backend
     networks:
       - aggregator_network
 
-  # React Frontend
-  frontend:
+  # News Aggregation Scheduler (Separate container for cron)
+  scheduler:
     build:
-      context: ./frontend
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: aggregator_frontend
-    restart: unless-stopped
-    ports:
-      - "3000:80"
+    container_name: aggregator_scheduler
     environment:
-      - REACT_APP_API_URL=http://localhost:8000/api
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=aggregator
+      - DB_USERNAME=aggregator
+      - DB_PASSWORD=aggregator_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./backend:/var/www/html
+      - ./cron:/etc/cron.d
+      - ./logs:/var/log
     depends_on:
-      - nginx
+      - postgres
+      - redis
+      - backend
     networks:
       - aggregator_network
+    command: >
+      sh -c "
+        # Wait for database to be ready
+        until php artisan migrate:status; do
+          echo 'Waiting for database...'
+          sleep 2
+        done
+        
+        # Start cron daemon
+        echo 'Starting news aggregation scheduler...'
+        cron -f
+      "
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   aggregator_network:

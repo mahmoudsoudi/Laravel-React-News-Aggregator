@@ -37,4 +37,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 422);
             }
         });
+    })
+    ->withSchedule(function (Illuminate\Console\Scheduling\Schedule $schedule): void {
+        // Run news aggregation every hour
+        $schedule->command('news:aggregate')->hourly();
+
+        // Run news aggregation every 30 minutes during business hours
+        $schedule->command('news:aggregate')->everyThirtyMinutes()
+                 ->between('6:00', '22:00');
     })->create();
