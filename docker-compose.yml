@@ -1,0 +1,95 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: aggregator_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aggregator
+      POSTGRES_USER: aggregator_user
+      POSTGRES_PASSWORD: aggregator_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - aggregator_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: aggregator_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - aggregator_network
+
+  # Laravel Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aggregator_backend
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./backend:/var/www/html
+      - /var/www/html/vendor
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_KEY=base64:your-app-key-here
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=aggregator
+      - DB_USERNAME=aggregator_user
+      - DB_PASSWORD=aggregator_password
+      - CACHE_DRIVER=redis
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=null
+      - REDIS_PORT=6379
+    depends_on:
+      - db
+      - redis
+    networks:
+      - aggregator_network
+
+  # Nginx for Laravel
+  nginx:
+    image: nginx:alpine
+    container_name: aggregator_nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./backend:/var/www/html
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    networks:
+      - aggregator_network
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aggregator_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000/api
+    depends_on:
+      - nginx
+    networks:
+      - aggregator_network
+
+volumes:
+  postgres_data:
+
+networks:
+  aggregator_network:
+    driver: bridge
