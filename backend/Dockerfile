@@ -34,10 +34,7 @@ RUN chown -R www-data:www-data /var/www/html \
 # Create log directory
 RUN mkdir -p /var/log && chown -R www-data:www-data /var/log
 
-# Copy cron configuration
-COPY ../cron/news-aggregator /etc/cron.d/news-aggregator
-RUN chmod 0644 /etc/cron.d/news-aggregator \
-    && crontab /etc/cron.d/news-aggregator
+# Cron configuration will be mounted as volume
 
 # Create supervisor configuration for cron
 RUN echo '[program:cron]' > /etc/supervisor/conf.d/cron.conf \

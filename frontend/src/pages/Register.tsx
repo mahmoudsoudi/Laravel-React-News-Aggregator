@@ -44,7 +44,7 @@ const Register: React.FC = () => {
     }
 
     try {
-      await register(formData.name, formData.email, formData.password, formData.password_confirmation);
+      await register(formData);
       navigate('/dashboard');
     } catch (err: any) {
       if (err.response?.data?.errors) {

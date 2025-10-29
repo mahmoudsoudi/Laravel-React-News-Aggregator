@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
-  const { user, logout, updateProfile, deleteAccount, loading } = useAuth();
+  const { user, logout, updateProfile, isLoading } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
@@ -70,11 +70,8 @@ const Dashboard: React.FC = () => {
   };
 
   const handleDeleteAccount = async () => {
-    try {
-      await deleteAccount();
-    } catch (err) {
-      console.error('Failed to delete account:', err);
-    }
+    // TODO: Implement delete account functionality
+    console.log('Delete account functionality not implemented yet');
   };
 
   const cancelEdit = () => {
@@ -88,7 +85,7 @@ const Dashboard: React.FC = () => {
     setErrors({});
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="dashboard-container">
         <div className="loading">Loading...</div>

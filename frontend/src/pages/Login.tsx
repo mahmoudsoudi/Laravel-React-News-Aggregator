@@ -35,8 +35,8 @@ const Login: React.FC = () => {
     setErrors({});
 
     try {
-      await login(formData.email, formData.password);
-      navigate('/dashboard');
+      await login(formData);
+      navigate('/');
     } catch (err: any) {
       if (err.response?.data?.errors) {
         setErrors(err.response.data.errors);

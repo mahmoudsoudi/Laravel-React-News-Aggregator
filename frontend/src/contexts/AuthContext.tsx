@@ -1,15 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, authAPI } from '../services/api';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
+import { authAPI, preferencesAPI } from '../services/api';
+import { AuthUser, LoginRequest, RegisterRequest, UpdateProfileRequest, UpdatePreferencesRequest } from '../types';
+import toast from 'react-hot-toast';
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, passwordConfirmation: string) => Promise<void>;
-  logout: () => Promise<void>;
-  updateProfile: (userData: Partial<User> & { password?: string; password_confirmation?: string }) => Promise<void>;
-  deleteAccount: () => Promise<void>;
-  loading: boolean;
+  login: (credentials: LoginRequest) => Promise<void>;
+  register: (userData: RegisterRequest) => Promise<void>;
+  logout: () => void;
+  updateProfile: (data: UpdateProfileRequest) => Promise<void>;
+  updatePreferences: (data: UpdatePreferencesRequest) => Promise<void>;
+  isLoading: boolean;
   error: string | null;
 }
 
@@ -23,129 +26,140 @@ export const useAuth = () => {
   return context;
 };
 
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+const AuthProviderInner: React.FC<AuthProviderProps> = ({ children }) => {
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const initAuth = async () => {
-      const storedToken = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
+    const storedToken = localStorage.getItem('auth_token');
+    const storedUser = localStorage.getItem('user');
 
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-        
-        // Verify token is still valid
-        try {
-          const response = await authAPI.getProfile();
-          setUser(response.data.user);
-        } catch (err) {
-          // Token is invalid, clear storage
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setToken(null);
-          setUser(null);
-        }
-      }
-      setLoading(false);
-    };
-
-    initAuth();
+    if (storedToken && storedUser) {
+      setToken(storedToken);
+      setUser(JSON.parse(storedUser));
+    }
+    setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  // Fetch user preferences when user is logged in
+  const { data: preferencesData } = useQuery({
+    queryKey: ['preferences'],
+    queryFn: () => preferencesAPI.get().then(res => res.data),
+    enabled: !!user,
+  });
+
+  // Update user preferences when data is fetched
+  useEffect(() => {
+    if (preferencesData?.success && preferencesData?.data && user) {
+      setUser(prev => prev ? { ...prev, preferences: preferencesData.data!.preferences } : null);
+    }
+  }, []);
+
+  const login = async (credentials: LoginRequest) => {
     try {
+      setIsLoading(true);
       setError(null);
-      setLoading(true);
-      const response = await authAPI.login({ email, password });
+      const response = await authAPI.login(credentials);
       
-      setUser(response.data.user);
-      setToken(response.data.token);
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      if (response.data.success) {
+        const { user: userData, token: authToken } = response.data.data!;
+        setUser(userData);
+        setToken(authToken);
+        localStorage.setItem('auth_token', authToken);
+        localStorage.setItem('user', JSON.stringify(userData));
+        toast.success('Login successful!');
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
+      const errorMessage = err.response?.data?.message || 'Login failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const register = async (name: string, email: string, password: string, passwordConfirmation: string) => {
+  const register = async (userData: RegisterRequest) => {
     try {
+      setIsLoading(true);
       setError(null);
-      setLoading(true);
-      const response = await authAPI.register({ 
-        name, 
-        email, 
-        password, 
-        password_confirmation: passwordConfirmation 
-      });
+      const response = await authAPI.register(userData);
       
-      setUser(response.data.user);
-      setToken(response.data.token);
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      if (response.data.success) {
+        const { user: newUser, token: authToken } = response.data.data!;
+        setUser(newUser);
+        setToken(authToken);
+        localStorage.setItem('auth_token', authToken);
+        localStorage.setItem('user', JSON.stringify(newUser));
+        toast.success('Registration successful!');
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed');
+      const errorMessage = err.response?.data?.message || 'Registration failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
       throw err;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const logout = async () => {
+  const updateProfile = async (data: UpdateProfileRequest) => {
     try {
-      await authAPI.logout();
-    } catch (err) {
-      // Continue with logout even if API call fails
-    } finally {
-      setUser(null);
-      setToken(null);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      const response = await authAPI.updateProfile(data);
+      
+      if (response.data.success) {
+        const updatedUser = response.data.data!.user;
+        setUser(prev => prev ? { ...prev, ...updatedUser } : null);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        toast.success('Profile updated successfully!');
+      }
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || 'Profile update failed';
+      toast.error(errorMessage);
+      throw err;
     }
   };
 
-  const updateProfile = async (userData: Partial<User> & { password?: string; password_confirmation?: string }) => {
+  const updatePreferences = async (data: UpdatePreferencesRequest) => {
     try {
-      setError(null);
-      setLoading(true);
-      const response = await authAPI.updateProfile(userData);
+      const response = await preferencesAPI.update(data);
       
-      setUser(response.data.user);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      if (response.data.success) {
+        const updatedPreferences = response.data.data!.preferences;
+        setUser(prev => prev ? { ...prev, preferences: updatedPreferences } : null);
+        toast.success('Preferences updated successfully!');
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Profile update failed');
+      const errorMessage = err.response?.data?.message || 'Preferences update failed';
+      toast.error(errorMessage);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
-  const deleteAccount = async () => {
-    try {
-      setError(null);
-      setLoading(true);
-      await authAPI.deleteAccount();
-      
-      setUser(null);
-      setToken(null);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Account deletion failed');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    queryClient.clear();
+    toast.success('Logged out successfully!');
   };
 
   const value: AuthContextType = {
@@ -155,10 +169,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     updateProfile,
-    deleteAccount,
-    loading,
+    updatePreferences,
+    isLoading,
     error,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProviderInner>{children}</AuthProviderInner>
+    </QueryClientProvider>
+  );
 };
