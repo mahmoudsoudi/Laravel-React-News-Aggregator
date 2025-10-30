@@ -47,6 +47,10 @@ services:
       - CACHE_DRIVER=redis
       - SESSION_DRIVER=redis
       - QUEUE_CONNECTION=redis
+      # News API Keys
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
+      - GUARDIAN_API_KEY=${GUARDIAN_API_KEY}
+      - NYTIMES_API_KEY=${NYTIMES_API_KEY}
     volumes:
       - ./backend:/var/www/html
       - ./cron:/etc/cron.d
@@ -74,6 +78,22 @@ services:
         php-fpm &
         cron -f
       "
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aggregator_frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000/api
+    networks:
+      - aggregator_network
 
   # Nginx Web Server
   nginx:
@@ -106,6 +126,10 @@ services:
       - DB_PASSWORD=aggregator_password
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # News API Keys
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
+      - GUARDIAN_API_KEY=${GUARDIAN_API_KEY}
+      - NYTIMES_API_KEY=${NYTIMES_API_KEY}
     volumes:
       - ./backend:/var/www/html
       - ./cron:/etc/cron.d

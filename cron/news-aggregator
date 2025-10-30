@@ -2,16 +2,16 @@
 # This file contains the cron jobs for the news aggregation system
 
 # Run news aggregation every hour
-0 * * * * www-data cd /var/www/html && php artisan news:aggregate >> /var/log/news-aggregation.log 2>&1
+0 * * * * root cd /var/www/html && /usr/local/bin/php artisan news:aggregate >> /var/log/news-aggregation.log 2>&1
 
 # Run news aggregation every 30 minutes during business hours (6 AM - 10 PM)
-*/30 6-22 * * * www-data cd /var/www/html && php artisan news:aggregate >> /var/log/news-aggregation.log 2>&1
+*/30 6-22 * * * root cd /var/www/html && /usr/local/bin/php artisan news:aggregate >> /var/log/news-aggregation.log 2>&1
 
 # Clean up old news articles (older than 30 days) - runs daily at 2 AM
-0 2 * * * www-data cd /var/www/html && php artisan news:cleanup >> /var/log/news-cleanup.log 2>&1
+0 2 * * * root cd /var/www/html && /usr/local/bin/php artisan news:cleanup >> /var/log/news-cleanup.log 2>&1
 
 # Generate daily news digest - runs daily at 8 AM
-0 8 * * * www-data cd /var/www/html && php artisan news:digest >> /var/log/news-digest.log 2>&1
+0 8 * * * root cd /var/www/html && /usr/local/bin/php artisan news:digest >> /var/log/news-digest.log 2>&1
 
 # Health check - runs every 5 minutes
-*/5 * * * * www-data cd /var/www/html && php artisan schedule:run >> /var/log/scheduler.log 2>&1
+*/5 * * * * root cd /var/www/html && /usr/local/bin/php artisan schedule:run >> /var/log/scheduler.log 2>&1

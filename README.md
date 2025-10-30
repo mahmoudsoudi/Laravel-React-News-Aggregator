@@ -84,12 +84,20 @@ docker-compose exec backend php artisan migrate:fresh --seed
 ## 🔧 Configuration
 
 ### Environment Variables
-Create `backend/.env` with your API keys:
+Create a `.env` file in the project root with your API keys:
 ```env
-NEWS_API_KEY=your_news_api_key
-GUARDIAN_API_KEY=your_guardian_api_key
-NYT_API_KEY=your_nyt_api_key
+# News API Keys
+NEWSAPI_KEY=your_newsapi_key_here
+GUARDIAN_API_KEY=your_guardian_api_key_here
+NYTIMES_API_KEY=your_nytimes_api_key_here
 ```
+
+**Get your free API keys:**
+- **NewsAPI.org**: https://newsapi.org/register (1,000 requests/day)
+- **The Guardian**: https://open-platform.theguardian.com/access/ (5,000 requests/day)
+- **New York Times**: https://developer.nytimes.com/ (4,000 requests/day)
+
+📖 **Detailed setup instructions**: See [ENVIRONMENT_SETUP.md](ENVIRONMENT_SETUP.md)
 
 ### Cron Jobs
 The system includes automated cron jobs:
